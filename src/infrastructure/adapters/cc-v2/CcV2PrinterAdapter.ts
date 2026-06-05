@@ -79,6 +79,7 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
         username: params.username,
         password: params.password ?? params.accessCode,
         serialNumber: params.serialNumber ?? "",
+        requireRegistration: true,
       } as Parameters<MqttTransport["connect"]>[0]);
     } catch (cause) {
       return err(new ElegooError(ErrorCode.PRINTER_CONNECTION_ERROR, `Failed to connect to ${params.host}`, cause));
