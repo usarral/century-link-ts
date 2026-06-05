@@ -119,8 +119,8 @@ async function runTests(printer: ConnectedPrinter) {
     // 7. File detail for the first file found
     const firstFile = filesResult.value.files[0];
     if (firstFile) {
-      section(`7. File Detail — getFileDetail("${firstFile.name}")`);
-      const detailResult = await printer.getFileDetail({ fileName: firstFile.name });
+      section(`7. File Detail — getFileDetail("${firstFile.fileName}")`);
+      const detailResult = await printer.getFileDetail({ fileName: firstFile.fileName });
       if (detailResult.ok) print("file_detail", detailResult.value);
       else console.error("ERROR:", detailResult.error.message);
     } else {

@@ -22,6 +22,8 @@ import type { PrinterInfo } from "../../../domain/entities/PrinterInfo.js";
 import type { PrinterStatusData, CanvasStatus } from "../../../domain/entities/PrinterStatus.js";
 import type { PrinterAttributes } from "../../../domain/entities/PrinterAttributes.js";
 import type { PrintTaskListData, PrintTaskDetail } from "../../../domain/entities/PrintTask.js";
+import type { FileListData, FileDetail } from "../../../domain/entities/FileInfo.js";
+import type { FileDetailParams } from "../../../domain/ports/FileAdapter.js";
 import type { Result } from "../../../application/result/Result.js";
 
 interface RawCcV2Attributes {
@@ -51,6 +53,32 @@ interface RawPrintTaskListResult {
 
 interface RawCanvasStatusResult {
   canvas_status?: RawCcV2Status["canvas_status"];
+}
+
+interface RawFileItem {
+  filename?: string;
+  type?: string;
+  print_time?: number;
+  layer?: number;
+  size?: number;
+  create_time?: number;
+  total_filament_used?: number;
+  total_print_times?: number;
+  last_print_time?: number;
+}
+
+interface RawFileListResult {
+  error_code?: number;
+  total?: number;
+  offset?: number;
+  file_list?: RawFileItem[];
+}
+
+interface RawFileDetailResult extends RawFileItem {
+  layer_height?: number;
+  thumbnail?: string;
+  total_filament_used_length?: number;
+  color_mapping?: Array<{ t?: number; color?: string; type?: string }>;
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -275,6 +303,61 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
 
   async deletePrintTasks(taskIds: readonly string[]): Promise<Result<void>> {
     return this.sendCommand(CC_V2_METHOD.DELETE_PRINT_TASKS, { task_ids: taskIds });
+  }
+
+  async getFileList(page = 1, pageSize = 20): Promise<Result<FileListData>> {
+    const offset = (page - 1) * pageSize;
+    const result = await this.requestWithTimeout<{ result: RawFileListResult }>(
+      encodeRequest(CC_V2_METHOD.GET_FILE_LIST, { storage_media: "local", offset, limit: pageSize }),
+    );
+    if (!result.ok) return result;
+    const raw = result.value.result;
+    return ok({
+      files: (raw.file_list ?? []).map((f) => ({
+        fileName: f.filename ?? "",
+        printTimeSeconds: f.print_time ?? 0,
+        layers: f.layer ?? 0,
+        layerHeightMm: 0,
+        thumbnailUrl: "",
+        sizeBytes: f.size ?? 0,
+        createdAt: f.create_time ?? 0,
+        filamentUsedGrams: f.total_filament_used ?? 0,
+        filamentUsedMm: 0,
+        totalPrintTimes: f.total_print_times ?? 0,
+        lastPrintAt: f.last_print_time ?? 0,
+        colorMapping: [],
+      })),
+      total: raw.total ?? 0,
+      page,
+      pageSize,
+    });
+  }
+
+  async getFileDetail(params: FileDetailParams): Promise<Result<FileDetail>> {
+    const result = await this.requestWithTimeout<{ result: RawFileDetailResult }>(
+      encodeRequest(CC_V2_METHOD.GET_FILE_DETAIL, { storage_media: "local", filename: params.fileName }),
+    );
+    if (!result.ok) return result;
+    const raw = result.value.result;
+    if (!raw.filename) return err(new ElegooError(ErrorCode.FILE_NOT_FOUND, `File not found: ${params.fileName}`));
+    return ok({
+      fileName: raw.filename,
+      printTimeSeconds: raw.print_time ?? 0,
+      layers: raw.layer ?? 0,
+      layerHeightMm: raw.layer_height ?? 0,
+      thumbnailUrl: raw.thumbnail ?? "",
+      sizeBytes: raw.size ?? 0,
+      createdAt: raw.create_time ?? 0,
+      filamentUsedGrams: raw.total_filament_used ?? 0,
+      filamentUsedMm: raw.total_filament_used_length ?? 0,
+      totalPrintTimes: raw.total_print_times ?? 0,
+      lastPrintAt: raw.last_print_time ?? 0,
+      colorMapping: (raw.color_mapping ?? []).map((m) => ({
+        trayIndex: m.t ?? 0,
+        color: m.color ?? "",
+        type: m.type ?? "",
+      })),
+    });
   }
 
   async triggerFileDownload(params: FileDownloadTriggerParams): Promise<Result<void>> {
