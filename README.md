@@ -15,12 +15,17 @@ It does **not** use, bundle, or redistribute any proprietary code, firmware, or 
 
 ### Supported printers
 
-| Protocol | Transport | Printers |
-|----------|-----------|----------|
-| Elegoo FDM CC (V1) | WebSocket · port 3030 | Neptune 4, Centauri Carbon |
-| Elegoo FDM CC2 (V2) | MQTT · port 1883 | Centauri Carbon 2, OrangeStorm Giga |
+| Protocol | Transport | Printers | Tested |
+|----------|-----------|----------|--------|
+| Elegoo FDM CC (V1) | WebSocket · port 3030 | Neptune 4, Centauri Carbon | — |
+| Elegoo FDM CC2 (V2) | MQTT · port 1883 | Centauri Carbon 2, OrangeStorm Giga | ✅ Centauri Carbon 2 |
+| Moonraker / Klipper | HTTP + WebSocket | Any Klipper printer with Moonraker | — |
 
 Cloud features (OAuth, Agora RTM) are out of scope — LAN only.
+
+> **Tested hardware:** The CC2 protocol has been verified against a real **Elegoo Centauri Carbon 2** on a local network. CC (V1) and Klipper support are implemented based on the elegoo-link C++ SDK and Moonraker API respectively, but have not been tested against physical hardware.
+>
+> **Have a different printer?** If you try this library with another Elegoo model (or any Klipper printer) and it works — or doesn't — please [open an issue](../../issues) or leave a comment. Confirmed working machines will be added to the table above.
 
 ---
 
@@ -152,7 +157,7 @@ pnpm build       # Compile to dist/
 - "Elegoo", "Neptune", "Centauri Carbon", "OrangeStorm", and related product names are **trademarks of Elegoo Inc.** Their use here is solely for descriptive purposes (nominative fair use) to identify the hardware this library is designed to communicate with.
 - This project was built by analyzing the publicly available [elegoo-link](https://github.com/elegooofficial/ElegooLink) open-source C++ SDK. No proprietary code, firmware, binaries, or trade secrets were used.
 - The communication protocol implemented here is derived from public documentation and open-source reference implementations.
-- Use of this library is **at your own risk**. The author(s) accept no responsibility for damage to hardware, voided warranties, or any other consequences arising from its use.
+- Use of this library is **entirely at your own risk**. The author(s) accept no responsibility for damage to hardware, failed prints, voided warranties, or any other consequences arising from its use. This includes, but is not limited to, unintended movements, temperature changes, or any other commands sent to the printer.
 - This library does not circumvent any access control or security mechanism. It communicates over the same local network protocol the official applications use.
 
 If you are a representative of Elegoo Inc. and have concerns about this project, please open an issue or contact the maintainer directly before taking any action — this project exists to benefit the maker community and is maintained in good faith.
