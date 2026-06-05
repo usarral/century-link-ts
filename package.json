@@ -1,6 +1,6 @@
 {
   "name": "@usarral/century-link-ts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript library for communicating with Elegoo 3D printers over LAN",
   "type": "module",
   "main": "./dist/index.js",
