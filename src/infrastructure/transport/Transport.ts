@@ -16,4 +16,6 @@ export interface Transport {
   send(message: unknown): Promise<void>;
   subscribe(handler: MessageHandler): Unsubscribe;
   isConnected(): boolean;
+  /** Optional: notified when connection drops (false) or recovers (true) after the initial connect. */
+  onConnectionChange?(handler: (connected: boolean) => void): Unsubscribe;
 }

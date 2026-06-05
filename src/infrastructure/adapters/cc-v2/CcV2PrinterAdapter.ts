@@ -69,6 +69,7 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
   private attributesHandlers = new Set<(attrs: PrinterAttributes) => void>();
   private connectionHandlers = new Set<(connected: boolean) => void>();
   private unsubscribeTransport: Unsubscribe | null = null;
+  private unsubscribeConnectionChange: Unsubscribe | null = null;
 
   async connect(params: ConnectParams): Promise<Result<PrinterInfo>> {
     try {
@@ -84,6 +85,9 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
     }
 
     this.unsubscribeTransport = this.transport.subscribe((raw) => this.onMessage(raw));
+    this.unsubscribeConnectionChange = this.transport.onConnectionChange((connected) => {
+      for (const handler of this.connectionHandlers) handler(connected);
+    });
 
     const attrsResult = await this.requestWithTimeout<{ result: unknown }>(
       encodeRequest(CC_V2_METHOD.GET_ATTRIBUTES),
@@ -113,6 +117,7 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
 
   async disconnect(): Promise<void> {
     this.unsubscribeTransport?.();
+    this.unsubscribeConnectionChange?.();
     await this.transport.disconnect();
     for (const handler of this.connectionHandlers) handler(false);
   }
