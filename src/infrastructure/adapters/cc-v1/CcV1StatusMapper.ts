@@ -92,5 +92,7 @@ export function mapStatus(printerId: string, raw: RawCcV1Status): PrinterStatusD
       cameraConnected: false,
       canvasConnected: false,
     },
+    exceptions: [],
+    deviceAssistantStatus: 0,
   };
 }

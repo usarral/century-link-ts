@@ -10,6 +10,7 @@ import type {
   CanvasInfo,
   TrayInfo,
   ExternalDeviceStatus,
+  PrinterException,
 } from "../../../domain/entities/PrinterStatus.js";
 
 // Raw wire types from CC V2 MQTT protocol
@@ -85,6 +86,8 @@ export interface RawCcV2Status {
   storage?: Record<string, { connected?: boolean }>;
   canvas_status?: RawCanvasStatus;
   external_devices?: RawExternalDevices;
+  exceptions?: Array<{ code?: string; timestamp?: number }>;
+  device_assistant_status?: number;
 }
 
 export function mapStatus(printerId: string, raw: RawCcV2Status): PrinterStatusData {
@@ -99,6 +102,8 @@ export function mapStatus(printerId: string, raw: RawCcV2Status): PrinterStatusD
     storage: mapStorage(raw.storage ?? {}),
     canvas: mapCanvasStatus(raw.canvas_status),
     externalDevices: mapExternalDevices(raw.external_devices),
+    exceptions: mapExceptions(raw.exceptions),
+    deviceAssistantStatus: raw.device_assistant_status ?? 0,
   };
 }
 
@@ -206,4 +211,9 @@ function mapExternalDevices(raw?: RawExternalDevices): ExternalDeviceStatus {
     cameraConnected: raw?.camera_connected ?? false,
     canvasConnected: raw?.canvas_connected ?? false,
   };
+}
+
+function mapExceptions(raw?: Array<{ code?: string; timestamp?: number }>): readonly PrinterException[] {
+  if (!raw) return [];
+  return raw.map((e) => ({ code: e.code ?? "", timestamp: e.timestamp ?? 0 }));
 }

@@ -4,6 +4,7 @@ import { ElegooError } from "../../../application/result/ElegooError.js";
 import { ErrorCode } from "../../../domain/types/ErrorCode.js";
 import type { FileAdapter, FileListParams, FileDetailParams, FileUploadParams, ProgressCallback } from "../../../domain/ports/FileAdapter.js";
 import type { FileDetail, FileListData, FilamentColorMapping } from "../../../domain/entities/FileInfo.js";
+import type { PrintTaskListData, PrintTaskDetail } from "../../../domain/entities/PrintTask.js";
 import type { Result } from "../../../application/result/Result.js";
 
 interface RawFileDetail {
@@ -24,6 +25,26 @@ interface RawFileDetail {
 interface RawFileListResponse {
   data?: {
     records?: RawFileDetail[];
+    total?: number;
+    current?: number;
+    size?: number;
+  };
+}
+
+interface RawPrintTaskItem {
+  task_id?: string;
+  file_name?: string;
+  print_time?: number;
+  total_layer?: number;
+  progress?: number;
+  status?: number;
+  created_at?: number;
+  thumbnail_url?: string;
+}
+
+interface RawPrintTaskListResponse {
+  data?: {
+    records?: RawPrintTaskItem[];
     total?: number;
     current?: number;
     size?: number;
@@ -76,6 +97,39 @@ export class CcV2FileAdapter implements FileAdapter {
         return err(new ElegooError(ErrorCode.OPERATION_CANCELLED, "Upload cancelled"));
       }
       return err(new ElegooError(ErrorCode.FILE_TRANSFER_FAILED, "Upload failed", cause));
+    }
+  }
+
+  async getPrintTaskList(page = 1, pageSize = 20): Promise<Result<PrintTaskListData>> {
+    try {
+      const raw = await this.http.get<RawPrintTaskListResponse>(`/print-tasks?page=${page}&size=${pageSize}`);
+      const tasks: PrintTaskDetail[] = (raw.data?.records ?? []).map((t) => ({
+        taskId: t.task_id ?? "",
+        fileName: t.file_name ?? "",
+        printTimeSeconds: t.print_time ?? 0,
+        totalLayers: t.total_layer ?? 0,
+        progress: t.progress ?? 0,
+        status: t.status ?? 0,
+        createdAt: t.created_at ?? 0,
+        thumbnailUrl: t.thumbnail_url ?? "",
+      }));
+      return ok({
+        tasks,
+        total: raw.data?.total ?? 0,
+        page: raw.data?.current ?? page,
+        pageSize: raw.data?.size ?? pageSize,
+      });
+    } catch (cause) {
+      return err(new ElegooError(ErrorCode.NETWORK_ERROR, "Failed to fetch print task list", cause));
+    }
+  }
+
+  async deletePrintTasks(taskIds: readonly string[]): Promise<Result<void>> {
+    try {
+      await this.http.post("/print-tasks/delete", { task_ids: taskIds });
+      return ok(undefined);
+    } catch (cause) {
+      return err(new ElegooError(ErrorCode.NETWORK_ERROR, "Failed to delete print tasks", cause));
     }
   }
 }

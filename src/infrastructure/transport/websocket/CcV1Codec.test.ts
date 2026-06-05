@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encodeRequest, decodeResponse, isStatusPush, CC_V1_CMD } from "./CcV1Codec.js";
+import { encodeRequest, decodeResponse, isStatusPush, getTopicType, CC_V1_CMD } from "./CcV1Codec.js";
 
 describe("CcV1Codec.encodeRequest", () => {
   it("produces a valid request envelope", () => {
@@ -41,13 +41,49 @@ describe("CcV1Codec.decodeResponse", () => {
   });
 });
 
-describe("CcV1Codec.isStatusPush", () => {
-  it("returns true for sdcp topic messages", () => {
+describe("CcV1Codec.getTopicType", () => {
+  it("identifies status push topic", () => {
+    const raw = JSON.stringify({ Topic: "sdcp/status/mainboard-001", Data: {} });
+    expect(getTopicType(raw)).toBe("status");
+  });
+
+  it("identifies attributes push topic", () => {
+    const raw = JSON.stringify({ Topic: "sdcp/attributes/mainboard-001", Data: {} });
+    expect(getTopicType(raw)).toBe("attributes");
+  });
+
+  it("identifies response topic", () => {
+    const raw = JSON.stringify({ Topic: "sdcp/response/mainboard-001", Data: {} });
+    expect(getTopicType(raw)).toBe("response");
+  });
+
+  it("returns unknown for unrecognised topics", () => {
     const raw = JSON.stringify({ Topic: "sdcp/request/mainboard-001", Data: {} });
+    expect(getTopicType(raw)).toBe("unknown");
+  });
+
+  it("returns unknown for malformed JSON", () => {
+    expect(getTopicType("not json")).toBe("unknown");
+  });
+});
+
+describe("CcV1Codec.isStatusPush", () => {
+  it("returns true for sdcp/status topic messages", () => {
+    const raw = JSON.stringify({ Topic: "sdcp/status/mainboard-001", Data: {} });
     expect(isStatusPush(raw)).toBe(true);
   });
 
-  it("returns false for regular responses", () => {
+  it("returns false for sdcp/response messages", () => {
+    const raw = JSON.stringify({ Topic: "sdcp/response/mainboard-001", Data: {} });
+    expect(isStatusPush(raw)).toBe(false);
+  });
+
+  it("returns false for sdcp/attributes messages", () => {
+    const raw = JSON.stringify({ Topic: "sdcp/attributes/mainboard-001", Data: {} });
+    expect(isStatusPush(raw)).toBe(false);
+  });
+
+  it("returns false for regular responses without Topic", () => {
     const raw = JSON.stringify({ RequestID: "req-1", Code: 0, Msg: "ok", Data: {} });
     expect(isStatusPush(raw)).toBe(false);
   });

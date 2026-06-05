@@ -36,8 +36,10 @@ export interface PrinterCapabilities {
   readonly supportsCamera: boolean;
   readonly supportsTimeLapse: boolean;
   readonly canSetPrinterName: boolean;
+  readonly canGetDiskInfo: boolean;
   readonly supportsMultiFilament: boolean;
   readonly supportsAutoBedLeveling: boolean;
+  readonly supportsHeatedBedSwitching: boolean;
   readonly supportsFilamentMapping: boolean;
   readonly supportsAutoRefill: boolean;
 }

@@ -58,11 +58,19 @@ export function decodeResponse(raw: string): CcV1Response {
   return parsed;
 }
 
-export function isStatusPush(raw: string): boolean {
+export function getTopicType(raw: string): "status" | "attributes" | "response" | "unknown" {
   try {
     const parsed = JSON.parse(raw) as { Topic?: string };
-    return typeof parsed.Topic === "string" && parsed.Topic.startsWith("sdcp/");
+    const topic = parsed.Topic ?? "";
+    if (topic.includes("sdcp/status")) return "status";
+    if (topic.includes("sdcp/attributes")) return "attributes";
+    if (topic.includes("sdcp/response")) return "response";
+    return "unknown";
   } catch {
-    return false;
+    return "unknown";
   }
+}
+
+export function isStatusPush(raw: string): boolean {
+  return getTopicType(raw) === "status";
 }

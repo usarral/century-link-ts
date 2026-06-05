@@ -69,6 +69,11 @@ export interface PrintJobStatus {
   readonly speedMode: 0 | 1 | 2 | 3;
 }
 
+export interface PrinterException {
+  readonly code: string;
+  readonly timestamp: number;
+}
+
 export interface PrinterCoreStatus {
   readonly state: PrinterState;
   readonly subState: PrinterSubState;
@@ -87,4 +92,6 @@ export interface PrinterStatusData {
   readonly storage: Readonly<Record<string, StorageStatus>>;
   readonly canvas: CanvasStatus;
   readonly externalDevices: ExternalDeviceStatus;
+  readonly exceptions: readonly PrinterException[];
+  readonly deviceAssistantStatus: number;
 }

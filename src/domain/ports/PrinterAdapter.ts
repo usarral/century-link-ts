@@ -1,6 +1,8 @@
 import type { PrinterAttributes } from "../entities/PrinterAttributes.js";
 import type { PrinterInfo } from "../entities/PrinterInfo.js";
 import type { PrinterStatusData } from "../entities/PrinterStatus.js";
+import type { CanvasStatus } from "../entities/PrinterStatus.js";
+import type { PrintTaskListData } from "../entities/PrintTask.js";
 import type { Result } from "../../application/result/Result.js";
 
 export type Unsubscribe = () => void;
@@ -35,6 +37,13 @@ export interface StartPrintParams {
   readonly slotMap?: readonly SlotMapItem[];
 }
 
+export interface FileDownloadTriggerParams {
+  readonly fileUrl: string;
+  readonly fileName: string;
+  readonly taskId: string;
+  readonly md5: string;
+}
+
 export interface PrinterAdapter {
   connect(params: ConnectParams): Promise<Result<PrinterInfo>>;
   disconnect(): Promise<void>;
@@ -44,6 +53,30 @@ export interface PrinterAdapter {
   pausePrint(): Promise<Result<void>>;
   resumePrint(): Promise<Result<void>>;
   stopPrint(): Promise<Result<void>>;
+
+  // Multi-filament / canvas
+  getCanvasStatus(timeoutMs?: number): Promise<Result<CanvasStatus>>;
+  setAutoRefill(enable: boolean): Promise<Result<void>>;
+
+  // Printer settings
+  updatePrinterName(name: string): Promise<Result<void>>;
+
+  // Hardware control
+  homeAxis(axes: string): Promise<Result<void>>;
+  moveAxis(axes: string, distanceMm: number): Promise<Result<void>>;
+  setTemperature(targets: Readonly<Record<string, number>>): Promise<Result<void>>;
+  setFanSpeed(speeds: Readonly<Record<string, number>>): Promise<Result<void>>;
+  setPrintSpeed(mode: 0 | 1 | 2 | 3): Promise<Result<void>>;
+
+  // Print tasks
+  getPrintTaskList(page?: number, pageSize?: number): Promise<Result<PrintTaskListData>>;
+  deletePrintTasks(taskIds: readonly string[]): Promise<Result<void>>;
+
+  // File download (printer pulls from URL)
+  triggerFileDownload(params: FileDownloadTriggerParams): Promise<Result<void>>;
+  cancelFileDownload(taskId: string): Promise<Result<void>>;
+
+  // Events
   onStatus(handler: (status: PrinterStatusData) => void): Unsubscribe;
   onConnection(handler: (connected: boolean) => void): Unsubscribe;
 }

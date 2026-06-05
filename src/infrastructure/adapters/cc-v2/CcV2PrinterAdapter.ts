@@ -10,11 +10,47 @@ import { ErrorCode } from "../../../domain/types/ErrorCode.js";
 import { PrinterType } from "../../../domain/types/PrinterType.js";
 import { ok, err } from "../../../application/result/Result.js";
 import { ElegooError } from "../../../application/result/ElegooError.js";
-import type { PrinterAdapter, ConnectParams, StartPrintParams, Unsubscribe } from "../../../domain/ports/PrinterAdapter.js";
+import type {
+  PrinterAdapter,
+  ConnectParams,
+  StartPrintParams,
+  FileDownloadTriggerParams,
+  Unsubscribe,
+} from "../../../domain/ports/PrinterAdapter.js";
 import type { PrinterInfo } from "../../../domain/entities/PrinterInfo.js";
-import type { PrinterStatusData } from "../../../domain/entities/PrinterStatus.js";
+import type { PrinterStatusData, CanvasStatus } from "../../../domain/entities/PrinterStatus.js";
 import type { PrinterAttributes } from "../../../domain/entities/PrinterAttributes.js";
+import type { PrintTaskListData, PrintTaskDetail } from "../../../domain/entities/PrintTask.js";
 import type { Result } from "../../../application/result/Result.js";
+
+interface RawCcV2Attributes {
+  machine_model?: string;
+  sn?: string;
+  hostname?: string;
+  software_version?: { ota_version?: string };
+}
+
+interface RawPrintTaskItem {
+  task_id?: string;
+  file_name?: string;
+  print_time?: number;
+  total_layer?: number;
+  progress?: number;
+  status?: number;
+  created_at?: number;
+  thumbnail_url?: string;
+}
+
+interface RawPrintTaskListResult {
+  list?: RawPrintTaskItem[];
+  total?: number;
+  page_number?: number;
+  page_size?: number;
+}
+
+interface RawCanvasStatusResult {
+  canvas_status?: RawCcV2Status["canvas_status"];
+}
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -90,13 +126,160 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
   }
 
   async getAttributes(timeoutMs = REQUEST_TIMEOUT_MS): Promise<Result<PrinterAttributes>> {
-    const result = await this.requestWithTimeout<{ result: unknown }>(
+    const result = await this.requestWithTimeout<{ result: RawCcV2Attributes }>(
       encodeRequest(CC_V2_METHOD.GET_ATTRIBUTES),
       timeoutMs,
     );
     if (!result.ok) return result;
-    // Attributes mapping is simplified — extend with RawCcV2Attributes when needed
-    return err(new ElegooError(ErrorCode.OPERATION_NOT_IMPLEMENTED, "Attributes mapping not yet implemented"));
+    const raw = result.value.result;
+    const info = this.printerInfo;
+    return ok({
+      printerId: info?.printerId ?? "",
+      printerType: PrinterType.ELEGOO_FDM_CC2,
+      brand: "Elegoo",
+      name: raw.hostname ?? info?.name ?? "Elegoo Printer",
+      model: raw.machine_model ?? info?.model ?? "",
+      firmwareVersion: raw.software_version?.ota_version ?? "",
+      mainboardId: info?.mainboardId ?? "",
+      serialNumber: raw.sn ?? info?.serialNumber ?? "",
+      host: info?.host ?? "",
+      authMode: (info?.authMode ?? "") as PrinterInfo["authMode"],
+      capabilities: {
+        storage: [
+          { name: "usb", removable: true },
+          { name: "internal", removable: false },
+        ],
+        fans: [
+          { name: "model", controllable: true, minSpeed: 0, maxSpeed: 100, supportsRpmReading: false },
+          { name: "chamber", controllable: true, minSpeed: 0, maxSpeed: 100, supportsRpmReading: false },
+          { name: "aux", controllable: true, minSpeed: 0, maxSpeed: 100, supportsRpmReading: false },
+        ],
+        temperatures: [
+          { name: "extruder", controllable: true, supportsReading: true, minTemperature: 0, maxTemperature: 300 },
+          { name: "heatedBed", controllable: true, supportsReading: true, minTemperature: 0, maxTemperature: 120 },
+          { name: "chamber", controllable: false, supportsReading: true, minTemperature: 0, maxTemperature: 60 },
+        ],
+        lights: [
+          { name: "chamber", type: "singleColor", minBrightness: 0, maxBrightness: 100 },
+        ],
+        supportsCamera: true,
+        supportsTimeLapse: true,
+        canSetPrinterName: true,
+        canGetDiskInfo: true,
+        supportsMultiFilament: true,
+        supportsAutoBedLeveling: true,
+        supportsHeatedBedSwitching: true,
+        supportsFilamentMapping: true,
+        supportsAutoRefill: true,
+      },
+    });
+  }
+
+  async getCanvasStatus(timeoutMs = REQUEST_TIMEOUT_MS): Promise<Result<CanvasStatus>> {
+    const result = await this.requestWithTimeout<{ result: RawCanvasStatusResult }>(
+      encodeRequest(CC_V2_METHOD.GET_CANVAS_STATUS),
+      timeoutMs,
+    );
+    if (!result.ok) return result;
+    const raw = result.value.result.canvas_status;
+    return ok({
+      activeCanvasId: raw?.active_canvas_id ?? 0,
+      activeTrayId: raw?.active_tray_id ?? 0,
+      autoRefill: raw?.auto_refill ?? false,
+      canvases: (raw?.canvases ?? []).map((c) => ({
+        canvasId: c.canvas_id ?? 0,
+        name: c.name ?? "",
+        model: c.model ?? "",
+        connected: c.connected ?? false,
+        trays: (c.trays ?? []).map((t) => ({
+          trayId: t.tray_id ?? 0,
+          brand: t.brand ?? "",
+          filamentType: t.filament_type ?? "",
+          filamentName: t.filament_name ?? "",
+          filamentCode: t.filament_code ?? "",
+          filamentColor: t.filament_color ?? "",
+          minNozzleTemp: t.min_nozzle_temp ?? 0,
+          maxNozzleTemp: t.max_nozzle_temp ?? 0,
+          status: (t.status ?? 0) as 0 | 1 | 2,
+        })),
+      })),
+    });
+  }
+
+  async setAutoRefill(enable: boolean): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.SET_AUTO_REFILL, { auto_refill: enable });
+  }
+
+  async updatePrinterName(name: string): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.UPDATE_NAME, { hostname: name });
+  }
+
+  async homeAxis(axes: string): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.HOME_AXES, { homed_axes: axes });
+  }
+
+  async moveAxis(axes: string, distanceMm: number): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.MOVE_AXES, { axes, distance: distanceMm });
+  }
+
+  async setTemperature(targets: Readonly<Record<string, number>>): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.SET_TEMPERATURE, {
+      heater_bed: targets["heatedBed"] ?? targets["heater_bed"] ?? 0,
+      extruder: targets["extruder"] ?? 0,
+    });
+  }
+
+  async setFanSpeed(speeds: Readonly<Record<string, number>>): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.SET_FAN_SPEED, {
+      fan: speeds["model"] ?? 0,
+      box_fan: speeds["chamber"] ?? 0,
+      aux_fan: speeds["aux"] ?? 0,
+    });
+  }
+
+  async setPrintSpeed(mode: 0 | 1 | 2 | 3): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.SET_PRINT_SPEED, { mode });
+  }
+
+  async getPrintTaskList(page = 1, pageSize = 20): Promise<Result<PrintTaskListData>> {
+    const result = await this.requestWithTimeout<{ result: RawPrintTaskListResult }>(
+      encodeRequest(CC_V2_METHOD.GET_PRINT_TASK_LIST, { page_number: page, page_size: pageSize }),
+    );
+    if (!result.ok) return result;
+    const raw = result.value.result;
+    const tasks: PrintTaskDetail[] = (raw.list ?? []).map((t) => ({
+      taskId: t.task_id ?? "",
+      fileName: t.file_name ?? "",
+      printTimeSeconds: t.print_time ?? 0,
+      totalLayers: t.total_layer ?? 0,
+      progress: t.progress ?? 0,
+      status: t.status ?? 0,
+      createdAt: t.created_at ?? 0,
+      thumbnailUrl: t.thumbnail_url ?? "",
+    }));
+    return ok({
+      tasks,
+      total: raw.total ?? 0,
+      page: raw.page_number ?? page,
+      pageSize: raw.page_size ?? pageSize,
+    });
+  }
+
+  async deletePrintTasks(taskIds: readonly string[]): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.DELETE_PRINT_TASKS, { task_ids: taskIds });
+  }
+
+  async triggerFileDownload(params: FileDownloadTriggerParams): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.DOWNLOAD_FILE, {
+      filename: params.fileName,
+      url: params.fileUrl,
+      md5: params.md5,
+      taskID: params.taskId,
+    });
+  }
+
+  async cancelFileDownload(taskId: string): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.CANCEL_DOWNLOAD, { taskID: taskId });
   }
 
   async startPrint(params: StartPrintParams): Promise<Result<void>> {
@@ -116,7 +299,7 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
   }
 
   async resumePrint(): Promise<Result<void>> {
-    return this.sendCommand(CC_V2_METHOD.START_PRINT, { resume: true });
+    return this.sendCommand(CC_V2_METHOD.RESUME_PRINT, {});
   }
 
   async stopPrint(): Promise<Result<void>> {
