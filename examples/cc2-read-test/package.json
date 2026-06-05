@@ -1,0 +1,16 @@
+{
+  "name": "cc2-read-test",
+  "version": "1.0.0",
+  "description": "Example: connect to an Elegoo CC2 printer and read all available data",
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.4"
+  }
+}

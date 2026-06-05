@@ -8,9 +8,18 @@ const DEFAULT_PASSWORD = "123456";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const RECONNECT_PERIOD_MS = 5_000;
 
+// Matches the Elegoo slicer's clientId generation: "0cli" + last-5-hex(timestamp) + 3-hex(random), capped at 10 chars
+function generateClientId(): string {
+  const t = Date.now().toString(16).slice(-5);
+  const n = Math.random().toString(16).slice(2, 5);
+  return ("0cli" + t + n).slice(0, 10);
+}
+
 export interface MqttTransportParams extends TransportParams {
   readonly serialNumber: string;
   readonly clientId?: string;
+  /** Send a CC2 api_register handshake before resolving connect(). Required for CC2 printers. */
+  readonly requireRegistration?: boolean;
 }
 
 export class MqttTransport implements Transport {
@@ -26,8 +35,9 @@ export class MqttTransport implements Transport {
   async connect(params: TransportParams): Promise<void> {
     const mqttParams = params as MqttTransportParams;
     this.serialNumber = mqttParams.serialNumber;
-    this.clientId = mqttParams.clientId ?? `1_PC_${Math.floor(Math.random() * 9000) + 1000}`;
+    this.clientId = mqttParams.clientId ?? generateClientId();
     const timeoutMs = params.timeoutMs ?? 10_000;
+    const requireRegistration = mqttParams.requireRegistration ?? false;
 
     this.subscriptionTopics = [
       `elegoo/${this.serialNumber}/api_status`,
@@ -57,23 +67,75 @@ export class MqttTransport implements Transport {
 
       client.on("connect", () => {
         if (!settled) {
-          // Initial connect — subscribe and resolve
+          // Initial connect — subscribe then optionally register
           clearTimeout(timer);
           this.client = client;
 
-          client.subscribe(this.subscriptionTopics, { qos: 1 }, (err) => {
-            if (!settled) {
-              if (err) {
-                settled = true;
-                client.end(true);
-                reject(err);
-                return;
-              }
+          const topicsToSubscribe = requireRegistration
+            ? [...this.subscriptionTopics, `elegoo/${this.serialNumber}/${this.clientId}/register_response`]
+            : this.subscriptionTopics;
+
+          client.subscribe(topicsToSubscribe, { qos: 1 }, (err) => {
+            if (settled) return;
+            if (err) {
+              settled = true;
+              client.end(true);
+              reject(err);
+              return;
+            }
+
+            if (!requireRegistration) {
               settled = true;
               this.connected = true;
               this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), HEARTBEAT_INTERVAL_MS);
               resolve();
+              return;
             }
+
+            // CC2 registration handshake
+            const regTimer = setTimeout(() => {
+              client.removeListener("message", onRegMessage);
+              if (!settled) {
+                settled = true;
+                client.end(true);
+                reject(new Error(`CC2 registration timed out for client ${this.clientId}`));
+              }
+            }, timeoutMs);
+
+            const onRegMessage = (_topic: string, payload: Buffer) => {
+              try {
+                const msg = JSON.parse(payload.toString()) as { client_id?: string; error?: string };
+                if (msg.client_id === this.clientId && msg.error === "ok") {
+                  clearTimeout(regTimer);
+                  client.removeListener("message", onRegMessage);
+                  if (!settled) {
+                    settled = true;
+                    this.connected = true;
+                    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), HEARTBEAT_INTERVAL_MS);
+                    resolve();
+                  }
+                }
+              } catch {
+                // ignore malformed messages during registration
+              }
+            };
+
+            client.on("message", onRegMessage);
+
+            client.publish(
+              `elegoo/${this.serialNumber}/api_register`,
+              JSON.stringify({ request_id: this.clientId, client_id: this.clientId }),
+              { qos: 1 },
+              (pubErr) => {
+                if (pubErr && !settled) {
+                  clearTimeout(regTimer);
+                  client.removeListener("message", onRegMessage);
+                  settled = true;
+                  client.end(true);
+                  reject(pubErr);
+                }
+              },
+            );
           });
         } else if (this.connected === false) {
           // Reconnect case — re-subscribe and notify handlers
