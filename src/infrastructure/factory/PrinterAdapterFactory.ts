@@ -1,6 +1,7 @@
 import { PrinterType } from "../../domain/types/PrinterType.js";
 import { CcV1PrinterAdapter } from "../adapters/cc-v1/CcV1PrinterAdapter.js";
 import { CcV1DiscoveryAdapter } from "../adapters/cc-v1/CcV1DiscoveryAdapter.js";
+import { CcV1FileAdapter } from "../adapters/cc-v1/CcV1FileAdapter.js";
 import { CcV2PrinterAdapter } from "../adapters/cc-v2/CcV2PrinterAdapter.js";
 import { CcV2DiscoveryAdapter } from "../adapters/cc-v2/CcV2DiscoveryAdapter.js";
 import { CcV2FileAdapter } from "../adapters/cc-v2/CcV2FileAdapter.js";
@@ -34,6 +35,8 @@ export function createPrinterAdapter(type: PrinterType): PrinterAdapter {
 
 export function createFileAdapter(type: PrinterType, host: string, token?: string, port?: number): FileAdapter {
   switch (type) {
+    case PrinterType.ELEGOO_FDM_CC:
+      return new CcV1FileAdapter(host);
     case PrinterType.ELEGOO_FDM_CC2:
       return new CcV2FileAdapter(host, token);
     case PrinterType.ELEGOO_FDM_KLIPPER:

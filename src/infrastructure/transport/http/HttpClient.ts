@@ -55,16 +55,16 @@ export class HttpClient {
 
     for (let offset = 0; offset < totalBytes; offset += CHUNK_SIZE) {
       const chunk = fileData.subarray(offset, offset + CHUNK_SIZE);
+      const end = offset + chunk.byteLength - 1;
 
       const response = await fetch(`${this.baseUrl}/upload`, {
         method: "PUT",
         headers: {
           ...this.headers(),
           "Content-Type": "application/octet-stream",
-          "X-File-Md5": md5,
+          "Content-Range": `bytes ${offset}-${end}/${totalBytes}`,
+          "X-File-MD5": md5,
           "X-File-Name": opts.fileName,
-          "X-Offset": String(offset),
-          "X-Total-Size": String(totalBytes),
         },
         body: chunk,
         signal: AbortSignal.timeout(180_000),
