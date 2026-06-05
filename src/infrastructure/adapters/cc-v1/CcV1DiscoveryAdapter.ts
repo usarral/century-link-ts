@@ -36,7 +36,7 @@ export class CcV1DiscoveryAdapter implements DiscoveryAdapter {
         model: parsed.Data.MachineName ?? "Unknown",
         mainboardId: parsed.Data.MainboardID,
         serialNumber: parsed.Data.MainboardID,
-        firmwareVersion: parsed.Data.FirmwareVersion ?? "",
+        firmwareVersion: (parsed.Data.FirmwareVersion ?? "").replace(/^[Vv]/, ""),
         authMode: "",
         webUrl: `http://${response.remoteAddress}`,
       };

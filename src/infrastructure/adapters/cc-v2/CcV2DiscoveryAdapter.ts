@@ -10,8 +10,8 @@ interface CcV2DiscoveryResult {
   host_name?: string;
   machine_model?: string;
   sn?: string;
-  token_status?: number;
-  lan_status?: number;
+  token_status?: number | boolean;
+  lan_status?: number | boolean;
   firmware_version?: string;
 }
 
@@ -33,7 +33,7 @@ export class CcV2DiscoveryAdapter implements DiscoveryAdapter {
       if (!parsed?.result?.sn) continue;
 
       const result = parsed.result;
-      const hasAccessCode = result.token_status === 1;
+      const hasAccessCode = result.token_status === 1 || result.token_status === true;
 
       yield {
         host: response.remoteAddress,
