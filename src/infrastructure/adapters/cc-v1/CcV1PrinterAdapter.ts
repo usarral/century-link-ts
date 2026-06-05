@@ -340,13 +340,54 @@ export class CcV1PrinterAdapter implements PrinterAdapter {
         return;
       }
       if (topicType === "attributes") {
+        // Push format: { Topic, Attributes: { MachineName, MainboardID, FirmwareVersion } }
+        // Response format: { Topic, Data: { Attributes: { ... } } }
+        const msg = JSON.parse(raw) as {
+          Data?: RawCcV1Attributes;
+          Attributes?: { MachineName?: string; MainboardID?: string; FirmwareVersion?: string };
+        };
+        // For pending request, resolve with Data field (response format)
         if (this.pendingAttributeRequest) {
-          const parsed = JSON.parse(raw) as { Data: RawCcV1Attributes };
           clearTimeout(this.pendingAttributeRequest.timer);
           const pending = this.pendingAttributeRequest;
           this.pendingAttributeRequest = null;
-          pending.resolve(parsed.Data ?? {});
+          pending.resolve(msg.Data ?? (msg.Attributes ? { Attributes: msg.Attributes } : {}));
+          return;
         }
+        // Unsolicited push — build and emit attributes event
+        const inner = msg.Attributes ?? msg.Data?.Attributes ?? {};
+        const info = this.printerInfo;
+        const built = {
+          printerId: info?.printerId ?? "",
+          printerType: PrinterType.ELEGOO_FDM_CC,
+          brand: "Elegoo",
+          name: inner.MachineName ?? info?.name ?? "",
+          model: inner.MachineName ?? info?.model ?? "",
+          firmwareVersion: inner.FirmwareVersion ?? info?.firmwareVersion ?? "",
+          mainboardId: inner.MainboardID ?? info?.mainboardId ?? "",
+          serialNumber: inner.MainboardID ?? info?.serialNumber ?? "",
+          host: info?.host ?? "",
+          authMode: (info?.authMode ?? "") as PrinterInfo["authMode"],
+          capabilities: {
+            storage: [{ name: "usb", removable: true }],
+            fans: [{ name: "model", controllable: true, minSpeed: 0, maxSpeed: 100, supportsRpmReading: false }],
+            temperatures: [
+              { name: "extruder", controllable: false, supportsReading: true, minTemperature: 0, maxTemperature: 300 },
+              { name: "heatedBed", controllable: false, supportsReading: true, minTemperature: 0, maxTemperature: 120 },
+            ],
+            lights: [],
+            supportsCamera: false,
+            supportsTimeLapse: false,
+            canSetPrinterName: false,
+            canGetDiskInfo: false,
+            supportsMultiFilament: false,
+            supportsAutoBedLeveling: true,
+            supportsHeatedBedSwitching: false,
+            supportsFilamentMapping: false,
+            supportsAutoRefill: false,
+          },
+        };
+        for (const handler of this.attributesHandlers) handler(built);
         return;
       }
       const response = decodeResponse(raw);

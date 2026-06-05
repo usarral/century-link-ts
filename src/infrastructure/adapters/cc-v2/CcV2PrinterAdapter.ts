@@ -3,6 +3,7 @@ import {
   encodeRequest,
   decodeMessage,
   isStatusPush,
+  isAttributesPush,
   CC_V2_METHOD,
 } from "../../transport/mqtt/CcV2Codec.js";
 import { mapStatus, type RawCcV2Status } from "./CcV2StatusMapper.js";
@@ -352,6 +353,47 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
       if (isStatusPush(msg)) {
         const status = mapStatus(this.printerInfo?.printerId ?? "", msg.result as RawCcV2Status);
         for (const handler of this.statusHandlers) handler(status);
+        return;
+      }
+      if (isAttributesPush(msg)) {
+        const raw = msg.result as RawCcV2Attributes;
+        const info = this.printerInfo;
+        const attrs = {
+          printerId: info?.printerId ?? "",
+          printerType: PrinterType.ELEGOO_FDM_CC2,
+          brand: "Elegoo",
+          name: raw.hostname ?? info?.name ?? "",
+          model: raw.machine_model ?? info?.model ?? "",
+          firmwareVersion: raw.software_version?.ota_version ?? info?.firmwareVersion ?? "",
+          mainboardId: raw.sn ?? info?.mainboardId ?? "",
+          serialNumber: raw.sn ?? info?.serialNumber ?? "",
+          host: info?.host ?? "",
+          authMode: (info?.authMode ?? "") as PrinterInfo["authMode"],
+          capabilities: {
+            storage: [{ name: "usb", removable: true }, { name: "internal", removable: false }],
+            fans: [
+              { name: "model", controllable: true, minSpeed: 0, maxSpeed: 100, supportsRpmReading: false },
+              { name: "chamber", controllable: true, minSpeed: 0, maxSpeed: 100, supportsRpmReading: false },
+              { name: "aux", controllable: true, minSpeed: 0, maxSpeed: 100, supportsRpmReading: false },
+            ],
+            temperatures: [
+              { name: "extruder", controllable: true, supportsReading: true, minTemperature: 0, maxTemperature: 300 },
+              { name: "heatedBed", controllable: true, supportsReading: true, minTemperature: 0, maxTemperature: 120 },
+              { name: "chamber", controllable: false, supportsReading: true, minTemperature: 0, maxTemperature: 60 },
+            ],
+            lights: [{ name: "chamber", type: "singleColor" as const, minBrightness: 0, maxBrightness: 100 }],
+            supportsCamera: true,
+            supportsTimeLapse: true,
+            canSetPrinterName: true,
+            canGetDiskInfo: true,
+            supportsMultiFilament: true,
+            supportsAutoBedLeveling: true,
+            supportsHeatedBedSwitching: true,
+            supportsFilamentMapping: true,
+            supportsAutoRefill: true,
+          },
+        };
+        for (const handler of this.attributesHandlers) handler(attrs);
         return;
       }
       const pending = this.pending.get(msg.id);

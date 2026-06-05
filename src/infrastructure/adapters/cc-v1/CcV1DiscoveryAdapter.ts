@@ -31,12 +31,14 @@ export class CcV1DiscoveryAdapter implements DiscoveryAdapter {
       yield {
         host: response.remoteAddress,
         printerType: PrinterType.ELEGOO_FDM_CC,
+        brand: "Elegoo",
         name: parsed.Data.Name ?? "Unknown",
         model: parsed.Data.MachineName ?? "Unknown",
         mainboardId: parsed.Data.MainboardID,
         serialNumber: parsed.Data.MainboardID,
         firmwareVersion: parsed.Data.FirmwareVersion ?? "",
         authMode: "",
+        webUrl: `http://${response.remoteAddress}`,
       };
     }
   }
