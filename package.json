@@ -1,5 +1,5 @@
 {
-  "name": "century-link-ts",
+  "name": "@usarral/century-link-ts",
   "version": "0.1.0",
   "description": "TypeScript library for communicating with Elegoo 3D printers over LAN",
   "type": "module",
@@ -41,6 +41,10 @@
   "homepage": "https://github.com/usarral/century-link-ts#readme",
   "bugs": {
     "url": "https://github.com/usarral/century-link-ts/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
