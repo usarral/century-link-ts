@@ -11,6 +11,12 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
@@ -28,6 +34,14 @@
     "websocket"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usarral/century-link-ts.git"
+  },
+  "homepage": "https://github.com/usarral/century-link-ts#readme",
+  "bugs": {
+    "url": "https://github.com/usarral/century-link-ts/issues"
+  },
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
     "mqtt": "^5.10.4",
