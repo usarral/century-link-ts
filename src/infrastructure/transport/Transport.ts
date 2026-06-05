@@ -4,6 +4,7 @@ export type MessageHandler = (message: unknown) => void;
 
 export interface TransportParams {
   readonly host: string;
+  readonly port?: number;
   readonly timeoutMs: number | undefined;
   readonly username: string | undefined;
   readonly password: string | undefined;

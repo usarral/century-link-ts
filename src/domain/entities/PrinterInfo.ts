@@ -4,6 +4,7 @@ export interface PrinterInfo {
   readonly printerId: string;
   readonly printerType: PrinterType;
   readonly brand: string;
+  readonly manufacturer?: string;
   readonly name: string;
   readonly model: string;
   readonly firmwareVersion: string;

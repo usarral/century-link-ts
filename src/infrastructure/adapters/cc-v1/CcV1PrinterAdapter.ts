@@ -76,6 +76,7 @@ export class CcV1PrinterAdapter implements PrinterAdapter {
   private pending = new Map<string, PendingRequest>();
   private pendingAttributeRequest: PendingAttributeRequest | null = null;
   private statusHandlers = new Set<(status: PrinterStatusData) => void>();
+  private attributesHandlers = new Set<(attrs: PrinterAttributes) => void>();
   private connectionHandlers = new Set<(connected: boolean) => void>();
   private unsubscribeTransport: Unsubscribe | null = null;
 
@@ -289,9 +290,38 @@ export class CcV1PrinterAdapter implements PrinterAdapter {
     return this.sendCommand(CC_V1_CMD.STOP_PRINT, {});
   }
 
+  async refreshPrinterStatus(): Promise<Result<void>> {
+    void this.getStatus().then((result) => {
+      if (result.ok) for (const h of this.statusHandlers) h(result.value);
+    });
+    return ok(undefined);
+  }
+
+  async refreshPrinterAttributes(): Promise<Result<void>> {
+    void this.getAttributes().then((result) => {
+      if (result.ok) for (const h of this.attributesHandlers) h(result.value);
+    });
+    return ok(undefined);
+  }
+
+  async getStatusRaw(timeoutMs = REQUEST_TIMEOUT_MS): Promise<Result<string>> {
+    const result = await this.requestWithTimeout<unknown>(
+      (id) => encodeRequest(id, CC_V1_CMD.GET_STATUS),
+      this.mainboardId,
+      timeoutMs,
+    );
+    if (!result.ok) return result;
+    return ok(JSON.stringify(result.value));
+  }
+
   onStatus(handler: (status: PrinterStatusData) => void): Unsubscribe {
     this.statusHandlers.add(handler);
     return () => this.statusHandlers.delete(handler);
+  }
+
+  onAttributes(handler: (attrs: PrinterAttributes) => void): Unsubscribe {
+    this.attributesHandlers.add(handler);
+    return () => this.attributesHandlers.delete(handler);
   }
 
   onConnection(handler: (connected: boolean) => void): Unsubscribe {

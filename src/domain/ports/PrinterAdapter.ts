@@ -15,6 +15,7 @@ export interface SlotMapItem {
 
 export interface ConnectParams {
   readonly host: string;
+  readonly port?: number;
   readonly name?: string;
   readonly model: string;
   readonly serialNumber?: string;
@@ -76,7 +77,15 @@ export interface PrinterAdapter {
   triggerFileDownload(params: FileDownloadTriggerParams): Promise<Result<void>>;
   cancelFileDownload(taskId: string): Promise<Result<void>>;
 
+  // Async refresh (result delivered via event handlers)
+  refreshPrinterStatus(): Promise<Result<void>>;
+  refreshPrinterAttributes(): Promise<Result<void>>;
+
+  // Raw protocol response string (for debugging)
+  getStatusRaw(timeoutMs?: number): Promise<Result<string>>;
+
   // Events
   onStatus(handler: (status: PrinterStatusData) => void): Unsubscribe;
+  onAttributes(handler: (attrs: PrinterAttributes) => void): Unsubscribe;
   onConnection(handler: (connected: boolean) => void): Unsubscribe;
 }

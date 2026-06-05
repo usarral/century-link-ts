@@ -10,6 +10,7 @@ import { GetPrinterStatusUseCase } from "./application/use-cases/GetPrinterStatu
 import { createPrinterAdapter, createDiscoveryAdapters, createFileAdapter } from "./infrastructure/factory/PrinterAdapterFactory.js";
 import { ElegooError } from "./application/result/ElegooError.js";
 import { ErrorCode } from "./domain/types/ErrorCode.js";
+import { PrinterType } from "./domain/types/PrinterType.js";
 import { err } from "./application/result/Result.js";
 import type { DiscoveredPrinter } from "./domain/entities/DiscoveredPrinter.js";
 import type { PrinterInfo } from "./domain/entities/PrinterInfo.js";
@@ -25,7 +26,10 @@ import type { Result } from "./application/result/Result.js";
 export interface ConnectedPrinter {
   readonly info: PrinterInfo;
   getStatus(timeoutMs?: number): Promise<Result<PrinterStatusData>>;
+  getStatusRaw(timeoutMs?: number): Promise<Result<string>>;
   getAttributes(timeoutMs?: number): Promise<Result<PrinterAttributes>>;
+  refreshPrinterStatus(): Promise<Result<void>>;
+  refreshPrinterAttributes(): Promise<Result<void>>;
   startPrint(params: StartPrintParams): Promise<Result<void>>;
   pausePrint(): Promise<Result<void>>;
   resumePrint(): Promise<Result<void>>;
@@ -46,18 +50,34 @@ export interface ConnectedPrinter {
   triggerFileDownload(params: FileDownloadTriggerParams): Promise<Result<void>>;
   cancelFileDownload(taskId: string): Promise<Result<void>>;
   onStatus(handler: (status: PrinterStatusData) => void): Unsubscribe;
+  onAttributes(handler: (attrs: PrinterAttributes) => void): Unsubscribe;
   onConnection(handler: (connected: boolean) => void): Unsubscribe;
   disconnect(): Promise<void>;
 }
 
 export class CenturyLink {
+  static readonly VERSION = "0.1.0";
+
   discover(params?: DiscoveryParams): AsyncIterable<DiscoveredPrinter> {
     const adapters = createDiscoveryAdapters();
     const useCase = new DiscoverPrintersUseCase(adapters);
     return useCase.execute(params);
   }
 
-  async connect(params: ConnectParams & { printerType: import("./domain/types/PrinterType.js").PrinterType }): Promise<Result<ConnectedPrinter>> {
+  getSupportedPrinterTypes(): PrinterType[] {
+    return [
+      PrinterType.ELEGOO_FDM_CC,
+      PrinterType.ELEGOO_FDM_CC2,
+      PrinterType.ELEGOO_FDM_KLIPPER,
+      PrinterType.GENERIC_FDM_KLIPPER,
+    ];
+  }
+
+  getVersion(): string {
+    return CenturyLink.VERSION;
+  }
+
+  async connect(params: ConnectParams & { printerType: PrinterType }): Promise<Result<ConnectedPrinter>> {
     const printerAdapter = createPrinterAdapter(params.printerType);
     const connectUseCase = new ConnectPrinterUseCase(printerAdapter);
 
@@ -68,7 +88,7 @@ export class CenturyLink {
 
     let fileAdapter: import("./domain/ports/FileAdapter.js").FileAdapter | undefined;
     try {
-      fileAdapter = createFileAdapter(params.printerType, params.host, params.accessCode ?? params.token);
+      fileAdapter = createFileAdapter(params.printerType, params.host, params.accessCode ?? params.token, params.port);
     } catch {
       // Some printer types may not have a file adapter — that's fine
     }
@@ -79,7 +99,10 @@ export class CenturyLink {
     const connectedPrinter: ConnectedPrinter = {
       info,
       getStatus: (timeoutMs) => new GetPrinterStatusUseCase(printerAdapter).execute(timeoutMs),
+      getStatusRaw: (timeoutMs) => printerAdapter.getStatusRaw(timeoutMs),
       getAttributes: (timeoutMs) => printerAdapter.getAttributes(timeoutMs),
+      refreshPrinterStatus: () => printerAdapter.refreshPrinterStatus(),
+      refreshPrinterAttributes: () => printerAdapter.refreshPrinterAttributes(),
       startPrint: (p) => new StartPrintUseCase(printerAdapter).execute(p),
       pausePrint: () => new PausePrintUseCase(printerAdapter).execute(),
       resumePrint: () => new ResumePrintUseCase(printerAdapter).execute(),
@@ -106,9 +129,10 @@ export class CenturyLink {
       setPrintSpeed: (mode) => printerAdapter.setPrintSpeed(mode),
       getPrintTaskList: (page, pageSize) => printerAdapter.getPrintTaskList(page, pageSize),
       deletePrintTasks: (taskIds) => printerAdapter.deletePrintTasks(taskIds),
-      triggerFileDownload: (params) => printerAdapter.triggerFileDownload(params),
+      triggerFileDownload: (p) => printerAdapter.triggerFileDownload(p),
       cancelFileDownload: (taskId) => printerAdapter.cancelFileDownload(taskId),
       onStatus: (handler) => printerAdapter.onStatus(handler),
+      onAttributes: (handler) => printerAdapter.onAttributes(handler),
       onConnection: (handler) => printerAdapter.onConnection(handler),
       disconnect: () => printerAdapter.disconnect(),
     };

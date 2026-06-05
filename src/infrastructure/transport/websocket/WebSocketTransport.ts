@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import type { Transport, TransportParams, MessageHandler } from "../Transport.js";
 import type { Unsubscribe } from "../../../domain/ports/PrinterAdapter.js";
 
-const WS_PORT = 3030;
+const WS_DEFAULT_PORT = 3030;
 const PING_INTERVAL_MS = 30_000;
 
 export class WebSocketTransport implements Transport {
@@ -11,7 +11,7 @@ export class WebSocketTransport implements Transport {
   private pingTimer: NodeJS.Timeout | null = null;
 
   async connect(params: TransportParams): Promise<void> {
-    const url = `ws://${params.host}:${WS_PORT}/websocket`;
+    const url = `ws://${params.host}:${params.port ?? WS_DEFAULT_PORT}/websocket`;
     const timeoutMs = params.timeoutMs ?? 10_000;
 
     return new Promise((resolve, reject) => {
