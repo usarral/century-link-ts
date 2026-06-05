@@ -3,6 +3,8 @@ import type { PrinterInfo } from "../entities/PrinterInfo.js";
 import type { PrinterStatusData } from "../entities/PrinterStatus.js";
 import type { CanvasStatus } from "../entities/PrinterStatus.js";
 import type { PrintTaskListData } from "../entities/PrintTask.js";
+import type { FileListData, FileDetail } from "../entities/FileInfo.js";
+import type { FileDetailParams } from "./FileAdapter.js";
 import type { Result } from "../../application/result/Result.js";
 
 export type Unsubscribe = () => void;
@@ -68,6 +70,10 @@ export interface PrinterAdapter {
   setTemperature(targets: Readonly<Record<string, number>>): Promise<Result<void>>;
   setFanSpeed(speeds: Readonly<Record<string, number>>): Promise<Result<void>>;
   setPrintSpeed(mode: 0 | 1 | 2 | 3): Promise<Result<void>>;
+
+  // File listing (optional — only implemented by adapters that support it via the device protocol)
+  getFileList?(page?: number, pageSize?: number): Promise<Result<FileListData>>;
+  getFileDetail?(params: FileDetailParams): Promise<Result<FileDetail>>;
 
   // Print tasks
   getPrintTaskList(page?: number, pageSize?: number): Promise<Result<PrintTaskListData>>;

@@ -117,10 +117,12 @@ export class CenturyLink {
         return fileAdapter.cancelUpload();
       },
       getFiles: (page, pageSize) => {
+        if (printerAdapter.getFileList) return printerAdapter.getFileList(page, pageSize);
         if (!fileAdapter) return noFileAdapter();
         return new GetFileListUseCase(fileAdapter).execute({ page, pageSize });
       },
       getFileDetail: (p) => {
+        if (printerAdapter.getFileDetail) return printerAdapter.getFileDetail(p);
         if (!fileAdapter) return noFileAdapter();
         return fileAdapter.getFileDetail(p);
       },
