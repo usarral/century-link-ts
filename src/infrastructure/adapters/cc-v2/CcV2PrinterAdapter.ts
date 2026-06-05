@@ -51,8 +51,35 @@ interface RawPrintTaskListResult {
   page_size?: number;
 }
 
+interface RawCanvasTray {
+  tray_id?: number;
+  brand?: string;
+  filament_type?: string;
+  filament_name?: string;
+  filament_code?: string;
+  filament_color?: string;
+  min_nozzle_temp?: number;
+  max_nozzle_temp?: number;
+  status?: number;
+}
+
+interface RawCanvasEntry {
+  canvas_id?: number;
+  name?: string;
+  model?: string;
+  connected?: number | boolean;
+  tray_list?: RawCanvasTray[];
+}
+
+interface RawCanvasInfo {
+  active_canvas_id?: number;
+  active_tray_id?: number;
+  auto_refill?: boolean;
+  canvas_list?: RawCanvasEntry[];
+}
+
 interface RawCanvasStatusResult {
-  canvas_status?: RawCcV2Status["canvas_status"];
+  canvas_info?: RawCanvasInfo;
 }
 
 interface RawFileItem {
@@ -217,17 +244,17 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
       timeoutMs,
     );
     if (!result.ok) return result;
-    const raw = result.value.result.canvas_status;
+    const raw = result.value.result.canvas_info;
     return ok({
       activeCanvasId: raw?.active_canvas_id ?? 0,
       activeTrayId: raw?.active_tray_id ?? 0,
       autoRefill: raw?.auto_refill ?? false,
-      canvases: (raw?.canvases ?? []).map((c) => ({
+      canvases: (raw?.canvas_list ?? []).map((c) => ({
         canvasId: c.canvas_id ?? 0,
         name: c.name ?? "",
         model: c.model ?? "",
-        connected: c.connected ?? false,
-        trays: (c.trays ?? []).map((t) => ({
+        connected: Boolean(c.connected),
+        trays: (c.tray_list ?? []).map((t) => ({
           trayId: t.tray_id ?? 0,
           brand: t.brand ?? "",
           filamentType: t.filament_type ?? "",
