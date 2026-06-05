@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest a new feature or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or limitation you're running into.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like the API / behavior to look like?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: printer
+    attributes:
+      label: Relevant printer / protocol
+      multiple: true
+      options:
+        - Elegoo CC2
+        - Elegoo CC
+        - Klipper / Moonraker
+        - All / General
