@@ -16,6 +16,7 @@ const CHUNK_SIZE = 1024 * 1024; // 1 MB — matches C++ SDK
 
 export class CcV1FileAdapter implements FileAdapter {
   private readonly baseUrl: string;
+  private activeUploadController: AbortController | null = null;
 
   constructor(host: string) {
     this.baseUrl = `http://${host}`;
@@ -30,6 +31,8 @@ export class CcV1FileAdapter implements FileAdapter {
   }
 
   async upload(params: FileUploadParams, onProgress?: ProgressCallback): Promise<Result<void>> {
+    const controller = new AbortController();
+    this.activeUploadController = controller;
     try {
       const fileData = await readFile(params.localFilePath);
       const totalBytes = fileData.byteLength;
@@ -38,6 +41,10 @@ export class CcV1FileAdapter implements FileAdapter {
       let uploadedBytes = 0;
 
       for (let offset = 0; offset < totalBytes; offset += CHUNK_SIZE) {
+        if (controller.signal.aborted) {
+          return err(new ElegooError(ErrorCode.OPERATION_CANCELLED, "Upload cancelled"));
+        }
+
         const chunk = fileData.subarray(offset, offset + CHUNK_SIZE);
 
         const form = new FormData();
@@ -48,10 +55,11 @@ export class CcV1FileAdapter implements FileAdapter {
         form.append("TotalSize", String(totalBytes));
         form.append("File", new Blob([chunk], { type: "application/octet-stream" }), params.fileName);
 
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(180_000)]);
         const response = await fetch(`${this.baseUrl}/uploadFile/upload`, {
           method: "POST",
           body: form,
-          signal: AbortSignal.timeout(180_000),
+          signal,
         });
 
         if (!response.ok) {
@@ -73,8 +81,18 @@ export class CcV1FileAdapter implements FileAdapter {
 
       return ok(undefined);
     } catch (cause) {
+      if (controller.signal.aborted) {
+        return err(new ElegooError(ErrorCode.OPERATION_CANCELLED, "Upload cancelled"));
+      }
       return err(new ElegooError(ErrorCode.FILE_TRANSFER_FAILED, "Upload failed", cause));
+    } finally {
+      this.activeUploadController = null;
     }
+  }
+
+  async cancelUpload(): Promise<Result<void>> {
+    this.activeUploadController?.abort();
+    return ok(undefined);
   }
 
   async getPrintTaskList(_page?: number, _pageSize?: number): Promise<Result<PrintTaskListData>> {

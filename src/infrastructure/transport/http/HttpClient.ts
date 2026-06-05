@@ -14,6 +14,7 @@ export interface UploadOptions {
   readonly localFilePath: string;
   readonly fileName: string;
   readonly onProgress: ProgressCallback | undefined;
+  readonly signal?: AbortSignal;
 }
 
 export class HttpClient {
@@ -57,6 +58,10 @@ export class HttpClient {
       const chunk = fileData.subarray(offset, offset + CHUNK_SIZE);
       const end = offset + chunk.byteLength - 1;
 
+      const signal = opts.signal
+        ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)])
+        : AbortSignal.timeout(180_000);
+
       const response = await fetch(`${this.baseUrl}/upload`, {
         method: "PUT",
         headers: {
@@ -67,7 +72,7 @@ export class HttpClient {
           "X-File-Name": opts.fileName,
         },
         body: chunk,
-        signal: AbortSignal.timeout(180_000),
+        signal,
       });
 
       if (!response.ok) throw new Error(`Upload failed at offset ${offset}: HTTP ${response.status}`);

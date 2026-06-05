@@ -28,6 +28,7 @@ interface MoonrakerMetadata {
 
 export class MoonrakerFileAdapter implements FileAdapter {
   private readonly baseUrl: string;
+  private activeUploadController: AbortController | null = null;
 
   constructor(host: string, port = 7125) {
     this.baseUrl = `http://${host}:${port}`;
@@ -78,6 +79,8 @@ export class MoonrakerFileAdapter implements FileAdapter {
   }
 
   async upload(params: FileUploadParams, onProgress?: ProgressCallback): Promise<Result<void>> {
+    const controller = new AbortController();
+    this.activeUploadController = controller;
     try {
       const fileData = await readFile(params.localFilePath);
       const totalBytes = fileData.byteLength;
@@ -86,16 +89,16 @@ export class MoonrakerFileAdapter implements FileAdapter {
       form.append("root", params.storageLocation || "gcodes");
       form.append("file", new Blob([fileData]), params.fileName);
 
-      // Report start
       if (onProgress) {
         const shouldContinue = onProgress(0, totalBytes);
         if (!shouldContinue) return err(new ElegooError(ErrorCode.OPERATION_CANCELLED, "Upload cancelled"));
       }
 
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(300_000)]);
       const response = await fetch(`${this.baseUrl}/server/files/upload`, {
         method: "POST",
         body: form,
-        signal: AbortSignal.timeout(300_000),
+        signal,
       });
 
       if (!response.ok) throw new Error(`Upload failed: HTTP ${response.status}`);
@@ -103,8 +106,18 @@ export class MoonrakerFileAdapter implements FileAdapter {
       if (onProgress) onProgress(totalBytes, totalBytes);
       return ok(undefined);
     } catch (cause) {
+      if (controller.signal.aborted) {
+        return err(new ElegooError(ErrorCode.OPERATION_CANCELLED, "Upload cancelled"));
+      }
       return err(new ElegooError(ErrorCode.FILE_TRANSFER_FAILED, "Upload failed", cause));
+    } finally {
+      this.activeUploadController = null;
     }
+  }
+
+  async cancelUpload(): Promise<Result<void>> {
+    this.activeUploadController?.abort();
+    return ok(undefined);
   }
 
   async getPrintTaskList(_page?: number, _pageSize?: number): Promise<Result<PrintTaskListData>> {

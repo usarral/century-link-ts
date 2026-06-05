@@ -24,6 +24,7 @@ export interface FileAdapter {
   getFileList(params?: FileListParams): Promise<Result<FileListData>>;
   getFileDetail(params: FileDetailParams): Promise<Result<FileDetail>>;
   upload(params: FileUploadParams, onProgress?: ProgressCallback): Promise<Result<void>>;
+  cancelUpload(): Promise<Result<void>>;
   getPrintTaskList(page?: number, pageSize?: number): Promise<Result<PrintTaskListData>>;
   deletePrintTasks(taskIds: readonly string[]): Promise<Result<void>>;
 }

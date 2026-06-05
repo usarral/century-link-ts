@@ -35,6 +35,7 @@ export interface ConnectedPrinter {
   resumePrint(): Promise<Result<void>>;
   stopPrint(): Promise<Result<void>>;
   uploadFile(params: FileUploadParams, onProgress?: ProgressCallback): Promise<Result<void>>;
+  cancelUpload(): Promise<Result<void>>;
   getFiles(page?: number, pageSize?: number): Promise<Result<FileListData>>;
   getFileDetail(params: FileDetailParams): Promise<Result<FileDetail>>;
   getCanvasStatus(timeoutMs?: number): Promise<Result<CanvasStatus>>;
@@ -110,6 +111,10 @@ export class CenturyLink {
       uploadFile: (p, onProgress) => {
         if (!fileAdapter) return noFileAdapter();
         return new UploadFileUseCase(fileAdapter).execute(p, onProgress);
+      },
+      cancelUpload: () => {
+        if (!fileAdapter) return noFileAdapter();
+        return fileAdapter.cancelUpload();
       },
       getFiles: (page, pageSize) => {
         if (!fileAdapter) return noFileAdapter();

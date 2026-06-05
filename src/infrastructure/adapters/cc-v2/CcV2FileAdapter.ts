@@ -53,6 +53,7 @@ interface RawPrintTaskListResponse {
 
 export class CcV2FileAdapter implements FileAdapter {
   private readonly http: HttpClient;
+  private activeUploadController: AbortController | null = null;
 
   constructor(host: string, token?: string) {
     this.http = new HttpClient({ baseUrl: `http://${host}`, token: token ?? undefined, timeoutMs: undefined });
@@ -85,19 +86,32 @@ export class CcV2FileAdapter implements FileAdapter {
   }
 
   async upload(params: FileUploadParams, onProgress?: ProgressCallback): Promise<Result<void>> {
+    const controller = new AbortController();
+    this.activeUploadController = controller;
     try {
       await this.http.uploadFile({
         localFilePath: params.localFilePath,
         fileName: params.fileName,
         onProgress: onProgress ?? undefined,
+        signal: controller.signal,
       });
       return ok(undefined);
     } catch (cause) {
+      if (controller.signal.aborted) {
+        return err(new ElegooError(ErrorCode.OPERATION_CANCELLED, "Upload cancelled"));
+      }
       if (cause instanceof Error && cause.message === "Upload cancelled by caller") {
         return err(new ElegooError(ErrorCode.OPERATION_CANCELLED, "Upload cancelled"));
       }
       return err(new ElegooError(ErrorCode.FILE_TRANSFER_FAILED, "Upload failed", cause));
+    } finally {
+      this.activeUploadController = null;
     }
+  }
+
+  async cancelUpload(): Promise<Result<void>> {
+    this.activeUploadController?.abort();
+    return ok(undefined);
   }
 
   async getPrintTaskList(page = 1, pageSize = 20): Promise<Result<PrintTaskListData>> {
