@@ -22,6 +22,7 @@ jobs:
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
           scope: '@usarral'
+          always-auth: true
 
       - run: pnpm install --frozen-lockfile
 
