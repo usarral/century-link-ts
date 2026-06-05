@@ -1,0 +1,7 @@
+export enum PrinterType {
+  UNKNOWN = -1,
+  ELEGOO_FDM_KLIPPER = 0,
+  ELEGOO_FDM_CC = 1,
+  ELEGOO_FDM_CC2 = 2,
+  GENERIC_FDM_KLIPPER = 100,
+}
