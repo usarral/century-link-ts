@@ -6,7 +6,7 @@ import {
   isAttributesPush,
   CC_V2_METHOD,
 } from "../../transport/mqtt/CcV2Codec.js";
-import { mapStatus, type RawCcV2Status } from "./CcV2StatusMapper.js";
+import { mapStatus, mergeStatus, type RawCcV2Status } from "./CcV2StatusMapper.js";
 import { ErrorCode } from "../../../domain/types/ErrorCode.js";
 import { PrinterType } from "../../../domain/types/PrinterType.js";
 import { ok, err } from "../../../application/result/Result.js";
@@ -125,6 +125,7 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
   private connectionHandlers = new Set<(connected: boolean) => void>();
   private unsubscribeTransport: Unsubscribe | null = null;
   private unsubscribeConnectionChange: Unsubscribe | null = null;
+  private cachedStatus: RawCcV2Status = {};
 
   async connect(params: ConnectParams): Promise<Result<PrinterInfo>> {
     try {
@@ -175,6 +176,7 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
     this.unsubscribeTransport?.();
     this.unsubscribeConnectionChange?.();
     await this.transport.disconnect();
+    this.cachedStatus = {};
     for (const handler of this.connectionHandlers) handler(false);
   }
 
@@ -184,7 +186,8 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
       timeoutMs,
     );
     if (!result.ok) return result;
-    const status = mapStatus(this.printerInfo?.printerId ?? "", result.value.result);
+    this.cachedStatus = result.value.result;
+    const status = mapStatus(this.printerInfo?.printerId ?? "", this.cachedStatus);
     return ok(status);
   }
 
@@ -467,7 +470,8 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
     try {
       const msg = decodeMessage(raw);
       if (isStatusPush(msg)) {
-        const status = mapStatus(this.printerInfo?.printerId ?? "", msg.result as RawCcV2Status);
+        this.cachedStatus = mergeStatus(this.cachedStatus, msg.result as RawCcV2Status);
+        const status = mapStatus(this.printerInfo?.printerId ?? "", this.cachedStatus);
         for (const handler of this.statusHandlers) handler(status);
         return;
       }

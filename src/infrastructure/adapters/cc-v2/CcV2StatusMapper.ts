@@ -7,213 +7,269 @@ import type {
   TemperatureStatus,
   FanStatus,
   CanvasStatus,
-  CanvasInfo,
-  TrayInfo,
   ExternalDeviceStatus,
-  PrinterException,
 } from "../../../domain/entities/PrinterStatus.js";
 
-// Raw wire types from CC V2 MQTT protocol
-interface RawTemperature {
-  current_temp?: number;
-  target_temp?: number;
-  highest_temp?: number;
-  lowest_temp?: number;
+// ── Raw wire types from real CC V2 MQTT protocol ──────────────────────────────
+
+interface RawMachineStatus {
+  status?: number;
+  sub_status?: number;
+  exception_status?: number[];
+  progress?: number;
 }
 
-interface RawFan {
+interface RawExtruder {
+  temperature?: number;
+  target?: number;
+}
+
+interface RawHeaterBed {
+  temperature?: number;
+  target?: number;
+}
+
+interface RawZSensor {
+  temperature?: number;
+  measured_max_temperature?: number;
+  measured_min_temperature?: number;
+}
+
+interface RawFanEntry {
   speed?: number;
   rpm?: number;
 }
 
-interface RawTray {
-  tray_id?: number;
-  brand?: string;
-  filament_type?: string;
-  filament_name?: string;
-  filament_code?: string;
-  filament_color?: string;
-  min_nozzle_temp?: number;
-  max_nozzle_temp?: number;
-  status?: number;
+interface RawExternalDevice {
+  camera?: boolean;
+  u_disk?: boolean;
+  sd_card?: boolean;
 }
 
-interface RawCanvas {
-  canvas_id?: number;
-  name?: string;
-  model?: string;
-  connected?: boolean;
-  trays?: RawTray[];
-}
-
-interface RawCanvasStatus {
-  active_canvas_id?: number;
-  active_tray_id?: number;
-  auto_refill?: boolean;
-  canvases?: RawCanvas[];
-}
-
-interface RawPrintTask {
-  task_id?: string;
-  file_name?: string;
-  total_time?: number;
-  current_time?: number;
-  estimated_time?: number;
+interface RawPrintStatus {
+  enable?: boolean;
+  filename?: string;
+  uuid?: string;
+  total_duration?: number;
+  print_duration?: number;
+  remaining_time_sec?: number;
   total_layer?: number;
   current_layer?: number;
-  progress?: number;
-  print_speed_mode?: number;
 }
 
-interface RawExternalDevices {
-  usb_connected?: boolean;
-  sd_card_connected?: boolean;
-  camera_connected?: boolean;
-  canvas_connected?: boolean;
+interface RawGcodeMove {
+  speed_mode?: number;
 }
 
 export interface RawCcV2Status {
-  current_status?: number;
-  sub_status?: number;
-  exception_codes?: number[];
-  support_progress?: boolean;
-  progress?: number;
-  current_print_task?: RawPrintTask;
-  temperatures?: Record<string, RawTemperature>;
-  fans?: Record<string, RawFan>;
-  axes?: number[];
-  lights?: Record<string, { connected?: boolean; brightness?: number; color?: number }>;
-  storage?: Record<string, { connected?: boolean }>;
-  canvas_status?: RawCanvasStatus;
-  external_devices?: RawExternalDevices;
-  exceptions?: Array<{ code?: string; timestamp?: number }>;
-  device_assistant_status?: number;
+  machine_status?: RawMachineStatus;
+  extruder?: RawExtruder;
+  heater_bed?: RawHeaterBed;
+  ztemperature_sensor?: RawZSensor;
+  fans?: Record<string, RawFanEntry>;
+  external_device?: RawExternalDevice;
+  print_status?: RawPrintStatus;
+  gcode_move?: RawGcodeMove;
+  // error_code is present in responses but ignored
+  error_code?: number;
 }
+
+// ── Deep merge for incremental push updates ────────────────────────────────────
+
+export function mergeStatus(base: RawCcV2Status, delta: RawCcV2Status): RawCcV2Status {
+  const merged: RawCcV2Status = { ...base };
+  for (const key of Object.keys(delta) as Array<keyof RawCcV2Status>) {
+    const dv = delta[key];
+    const bv = base[key];
+    if (dv !== null && typeof dv === "object" && !Array.isArray(dv) &&
+        bv !== null && typeof bv === "object" && !Array.isArray(bv)) {
+      // @ts-expect-error dynamic merge
+      merged[key] = { ...bv, ...dv };
+    } else {
+      // @ts-expect-error dynamic assign
+      merged[key] = dv;
+    }
+  }
+  return merged;
+}
+
+// ── State mapping (based on elegoo-link C++ SDK) ───────────────────────────────
+
+function mapState(status: number): PrinterState {
+  switch (status) {
+    case -1: return PrinterState.OFFLINE;
+    case 0:  return PrinterState.INITIALIZING;
+    case 1:  return PrinterState.IDLE;
+    case 2:  return PrinterState.PRINTING;
+    case 3:
+    case 4:  return PrinterState.FILAMENT_OPERATING;
+    case 5:  return PrinterState.AUTO_LEVELING;
+    case 6:  return PrinterState.PID_CALIBRATING;
+    case 7:  return PrinterState.RESONANCE_TESTING;
+    case 8:  return PrinterState.SELF_CHECKING;
+    case 9:  return PrinterState.UPDATING;
+    case 10: return PrinterState.HOMING;
+    default: return PrinterState.UNKNOWN;
+  }
+}
+
+function mapSubState(mainStatus: number, subStatus: number): PrinterSubState {
+  if (mainStatus === 2) {
+    switch (subStatus) {
+      case 2075: return PrinterSubState.P_PRINTING;
+      case 2077: return PrinterSubState.P_PRINTING_COMPLETED;
+      case 2501: return PrinterSubState.P_PAUSING;
+      case 2502:
+      case 2505: return PrinterSubState.P_PAUSED;
+      case 2401: return PrinterSubState.P_RESUMING;
+      case 2402: return PrinterSubState.P_RESUMING_COMPLETED;
+      case 2503: return PrinterSubState.P_STOPPING;
+      case 2504: return PrinterSubState.P_STOPPED;
+      case 2801:
+      case 2802: return PrinterSubState.P_HOMING;
+      case 2901:
+      case 2902: return PrinterSubState.P_AUTO_LEVELING;
+      case 1045:
+      case 1096: return PrinterSubState.P_EXTRUDER_PREHEATING;
+      case 1405:
+      case 1906: return PrinterSubState.P_HEATED_BED_PREHEATING;
+      case 0:    return PrinterSubState.NONE;
+      default:   return PrinterSubState.UNKNOWN;
+    }
+  }
+  if (mainStatus === 3 || mainStatus === 4) {
+    switch (subStatus) {
+      case 1133:
+      case 1134:
+      case 1135: return PrinterSubState.FO_FILAMENT_LOADING;
+      case 1136: return PrinterSubState.FO_FILAMENT_LOADING_COMPLETED;
+      case 1144: return PrinterSubState.FO_FILAMENT_UNLOADING;
+      case 1145: return PrinterSubState.FO_FILAMENT_UNLOADING_COMPLETED;
+      case 0:    return PrinterSubState.NONE;
+      default:   return PrinterSubState.UNKNOWN;
+    }
+  }
+  if (mainStatus === 5) {
+    switch (subStatus) {
+      case 2901: return PrinterSubState.AL_AUTO_LEVELING;
+      case 2902: return PrinterSubState.AL_AUTO_LEVELING_COMPLETED;
+      case 0:    return PrinterSubState.NONE;
+      default:   return PrinterSubState.UNKNOWN;
+    }
+  }
+  if (mainStatus === 6) {
+    switch (subStatus) {
+      case 1503:
+      case 1504: return PrinterSubState.PC_PID_CALIBRATING;
+      case 1505: return PrinterSubState.PC_PID_CALIBRATING_COMPLETED;
+      case 1506: return PrinterSubState.PC_PID_CALIBRATING_FAILED;
+      case 0:    return PrinterSubState.NONE;
+      default:   return PrinterSubState.UNKNOWN;
+    }
+  }
+  return subStatus === 0 ? PrinterSubState.NONE : PrinterSubState.UNKNOWN;
+}
+
+// ── Main mapper ────────────────────────────────────────────────────────────────
 
 export function mapStatus(printerId: string, raw: RawCcV2Status): PrinterStatusData {
-  return {
-    printerId,
-    printer: mapCoreStatus(raw),
-    job: raw.current_print_task ? mapJobStatus(raw.current_print_task) : undefined,
-    temperatures: mapTemperatures(raw.temperatures ?? {}),
-    fans: mapFans(raw.fans ?? {}),
-    axes: raw.axes ?? [],
-    lights: mapLights(raw.lights ?? {}),
-    storage: mapStorage(raw.storage ?? {}),
-    canvas: mapCanvasStatus(raw.canvas_status),
-    externalDevices: mapExternalDevices(raw.external_devices),
-    exceptions: mapExceptions(raw.exceptions),
-    deviceAssistantStatus: raw.device_assistant_status ?? 0,
-  };
-}
+  const ms = raw.machine_status;
+  const mainStatus = ms?.status ?? -1;
+  const subStatus = ms?.sub_status ?? 0;
+  const state = mapState(mainStatus);
+  const subState = mapSubState(mainStatus, subStatus);
 
-function mapCoreStatus(raw: RawCcV2Status): PrinterCoreStatus {
-  return {
-    state: (raw.current_status ?? PrinterState.UNKNOWN) as PrinterState,
-    subState: (raw.sub_status ?? PrinterSubState.NONE) as PrinterSubState,
-    exceptionCodes: raw.exception_codes ?? [],
-    progress: raw.progress ?? 0,
+  const core: PrinterCoreStatus = {
+    state,
+    subState,
+    exceptionCodes: ms?.exception_status ?? [],
+    progress: ms?.progress ?? 0,
   };
-}
 
-function mapJobStatus(raw: RawPrintTask): PrintJobStatus {
-  return {
-    taskId: raw.task_id ?? "",
-    fileName: raw.file_name ?? "",
-    totalTimeSeconds: raw.total_time ?? 0,
-    elapsedTimeSeconds: raw.current_time ?? 0,
-    remainingTimeSeconds: raw.estimated_time ?? 0,
-    totalLayers: raw.total_layer ?? 0,
-    currentLayer: raw.current_layer ?? 0,
-    progress: raw.progress ?? 0,
-    speedMode: (raw.print_speed_mode ?? 0) as 0 | 1 | 2 | 3,
-  };
-}
-
-function mapTemperatures(raw: Record<string, RawTemperature>): Record<string, TemperatureStatus> {
-  const result: Record<string, TemperatureStatus> = {};
-  for (const [key, val] of Object.entries(raw)) {
-    result[key] = {
-      current: val.current_temp ?? 0,
-      target: val.target_temp ?? 0,
-      highest: val.highest_temp ?? 0,
-      lowest: val.lowest_temp ?? 0,
+  const temperatures: Record<string, TemperatureStatus> = {};
+  if (raw.extruder) {
+    temperatures.extruder = {
+      current: raw.extruder.temperature ?? 0,
+      target: raw.extruder.target ?? 0,
+      highest: 0,
+      lowest: 0,
     };
   }
-  return result;
-}
-
-function mapFans(raw: Record<string, RawFan>): Record<string, FanStatus> {
-  const result: Record<string, FanStatus> = {};
-  for (const [key, val] of Object.entries(raw)) {
-    result[key] = { speed: val.speed ?? 0, rpm: val.rpm ?? 0 };
+  if (raw.heater_bed) {
+    temperatures.heatedBed = {
+      current: raw.heater_bed.temperature ?? 0,
+      target: raw.heater_bed.target ?? 0,
+      highest: 0,
+      lowest: 0,
+    };
   }
-  return result;
-}
-
-function mapLights(
-  raw: Record<string, { connected?: boolean; brightness?: number; color?: number }>,
-): Record<string, { connected: boolean; brightness: number; color: number }> {
-  const result: Record<string, { connected: boolean; brightness: number; color: number }> = {};
-  for (const [key, val] of Object.entries(raw)) {
-    result[key] = { connected: val.connected ?? false, brightness: val.brightness ?? 0, color: val.color ?? 0 };
+  if (raw.ztemperature_sensor) {
+    temperatures.chamber = {
+      current: raw.ztemperature_sensor.temperature ?? 0,
+      target: 0,
+      highest: raw.ztemperature_sensor.measured_max_temperature ?? 0,
+      lowest: raw.ztemperature_sensor.measured_min_temperature ?? 0,
+    };
   }
-  return result;
-}
 
-function mapStorage(
-  raw: Record<string, { connected?: boolean }>,
-): Record<string, { connected: boolean }> {
-  const result: Record<string, { connected: boolean }> = {};
-  for (const [key, val] of Object.entries(raw)) {
-    result[key] = { connected: val.connected ?? false };
+  const fans: Record<string, FanStatus> = {};
+  const rf = raw.fans ?? {};
+  const fanMap: Array<[string, string]> = [
+    ["fan", "model"],
+    ["heater_fan", "heatsink"],
+    ["controller_fan", "controller"],
+    ["box_fan", "chassis"],
+    ["aux_fan", "aux"],
+  ];
+  for (const [rawKey, mappedKey] of fanMap) {
+    if (rf[rawKey]) {
+      fans[mappedKey] = { speed: rf[rawKey].speed ?? 0, rpm: rf[rawKey].rpm ?? 0 };
+    }
   }
-  return result;
-}
 
-function mapCanvasStatus(raw?: RawCanvasStatus): CanvasStatus {
-  return {
-    activeCanvasId: raw?.active_canvas_id ?? 0,
-    activeTrayId: raw?.active_tray_id ?? 0,
-    autoRefill: raw?.auto_refill ?? false,
-    canvases: (raw?.canvases ?? []).map(mapCanvas),
+  const ed = raw.external_device;
+  const externalDevices: ExternalDeviceStatus = {
+    cameraConnected: ed?.camera ?? false,
+    usbConnected: ed?.u_disk ?? false,
+    sdCardConnected: ed?.sd_card ?? false,
+    canvasConnected: false,
   };
-}
 
-function mapCanvas(raw: RawCanvas): CanvasInfo {
-  return {
-    canvasId: raw.canvas_id ?? 0,
-    name: raw.name ?? "",
-    model: raw.model ?? "",
-    connected: raw.connected ?? false,
-    trays: (raw.trays ?? []).map(mapTray),
+  let job: PrintJobStatus | undefined;
+  if (state === PrinterState.PRINTING && raw.print_status) {
+    const ps = raw.print_status;
+    job = {
+      taskId: ps.uuid ?? "",
+      fileName: ps.filename ?? "",
+      totalTimeSeconds: ps.total_duration ?? 0,
+      elapsedTimeSeconds: ps.print_duration ?? 0,
+      remainingTimeSeconds: ps.remaining_time_sec ?? 0,
+      totalLayers: ps.total_layer ?? 0,
+      currentLayer: ps.current_layer ?? 0,
+      progress: ms?.progress ?? 0,
+      speedMode: ((raw.gcode_move?.speed_mode ?? 1) as 0 | 1 | 2 | 3),
+    };
+  }
+
+  const emptyCanvas: CanvasStatus = {
+    activeCanvasId: 0,
+    activeTrayId: 0,
+    autoRefill: false,
+    canvases: [],
   };
-}
 
-function mapTray(raw: RawTray): TrayInfo {
   return {
-    trayId: raw.tray_id ?? 0,
-    brand: raw.brand ?? "",
-    filamentType: raw.filament_type ?? "",
-    filamentName: raw.filament_name ?? "",
-    filamentCode: raw.filament_code ?? "",
-    filamentColor: raw.filament_color ?? "",
-    minNozzleTemp: raw.min_nozzle_temp ?? 0,
-    maxNozzleTemp: raw.max_nozzle_temp ?? 0,
-    status: (raw.status ?? 0) as 0 | 1 | 2,
+    printerId,
+    printer: core,
+    job,
+    temperatures,
+    fans,
+    axes: [],
+    lights: {},
+    storage: {},
+    canvas: emptyCanvas,
+    externalDevices,
+    exceptions: [],
+    deviceAssistantStatus: 0,
   };
-}
-
-function mapExternalDevices(raw?: RawExternalDevices): ExternalDeviceStatus {
-  return {
-    usbConnected: raw?.usb_connected ?? false,
-    sdCardConnected: raw?.sd_card_connected ?? false,
-    cameraConnected: raw?.camera_connected ?? false,
-    canvasConnected: raw?.canvas_connected ?? false,
-  };
-}
-
-function mapExceptions(raw?: Array<{ code?: string; timestamp?: number }>): readonly PrinterException[] {
-  if (!raw) return [];
-  return raw.map((e) => ({ code: e.code ?? "", timestamp: e.timestamp ?? 0 }));
 }
