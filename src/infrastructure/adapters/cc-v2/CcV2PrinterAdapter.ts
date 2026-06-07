@@ -307,6 +307,10 @@ export class CcV2PrinterAdapter implements PrinterAdapter {
     return this.sendCommand(CC_V2_METHOD.SET_PRINT_SPEED, { mode });
   }
 
+  async setChamberLight(on: boolean): Promise<Result<void>> {
+    return this.sendCommand(CC_V2_METHOD.SET_LIGHT, { status: on ? 1 : 0 });
+  }
+
   async getPrintTaskList(page = 1, pageSize = 20): Promise<Result<PrintTaskListData>> {
     const result = await this.requestWithTimeout<{ result: RawPrintTaskListResult }>(
       encodeRequest(CC_V2_METHOD.GET_PRINT_TASK_LIST, { page_number: page, page_size: pageSize }),

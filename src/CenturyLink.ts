@@ -46,6 +46,7 @@ export interface ConnectedPrinter {
   setTemperature(targets: Readonly<Record<string, number>>): Promise<Result<void>>;
   setFanSpeed(speeds: Readonly<Record<string, number>>): Promise<Result<void>>;
   setPrintSpeed(mode: 0 | 1 | 2 | 3): Promise<Result<void>>;
+  setChamberLight(on: boolean): Promise<Result<void>>;
   getPrintTaskList(page?: number, pageSize?: number): Promise<Result<PrintTaskListData>>;
   deletePrintTasks(taskIds: readonly string[]): Promise<Result<void>>;
   triggerFileDownload(params: FileDownloadTriggerParams): Promise<Result<void>>;
@@ -134,6 +135,7 @@ export class CenturyLink {
       setTemperature: (targets) => printerAdapter.setTemperature(targets),
       setFanSpeed: (speeds) => printerAdapter.setFanSpeed(speeds),
       setPrintSpeed: (mode) => printerAdapter.setPrintSpeed(mode),
+      setChamberLight: (on) => printerAdapter.setChamberLight(on),
       getPrintTaskList: (page, pageSize) => printerAdapter.getPrintTaskList(page, pageSize),
       deletePrintTasks: (taskIds) => printerAdapter.deletePrintTasks(taskIds),
       triggerFileDownload: (p) => printerAdapter.triggerFileDownload(p),

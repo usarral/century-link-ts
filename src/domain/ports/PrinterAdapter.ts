@@ -70,6 +70,7 @@ export interface PrinterAdapter {
   setTemperature(targets: Readonly<Record<string, number>>): Promise<Result<void>>;
   setFanSpeed(speeds: Readonly<Record<string, number>>): Promise<Result<void>>;
   setPrintSpeed(mode: 0 | 1 | 2 | 3): Promise<Result<void>>;
+  setChamberLight(on: boolean): Promise<Result<void>>;
 
   // File listing (optional — only implemented by adapters that support it via the device protocol)
   getFileList?(page?: number, pageSize?: number): Promise<Result<FileListData>>;

@@ -225,6 +225,9 @@ export class MoonrakerPrinterAdapter implements PrinterAdapter {
   async setPrintSpeed(_mode: 0 | 1 | 2 | 3): Promise<Result<void>> {
     return err(new ElegooError(ErrorCode.OPERATION_NOT_IMPLEMENTED, "setPrintSpeed not supported on Moonraker"));
   }
+  async setChamberLight(_on: boolean): Promise<Result<void>> {
+    return err(new ElegooError(ErrorCode.OPERATION_NOT_IMPLEMENTED, "setChamberLight not supported on Moonraker"));
+  }
 
   async getCanvasStatus(_timeoutMs?: number): Promise<Result<CanvasStatus>> {
     return err(new ElegooError(ErrorCode.OPERATION_NOT_IMPLEMENTED, "getCanvasStatus not supported on Moonraker"));

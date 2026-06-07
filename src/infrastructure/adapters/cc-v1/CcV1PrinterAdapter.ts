@@ -253,6 +253,9 @@ export class CcV1PrinterAdapter implements PrinterAdapter {
   async setPrintSpeed(_mode: 0 | 1 | 2 | 3): Promise<Result<void>> {
     return err(new ElegooError(ErrorCode.OPERATION_NOT_IMPLEMENTED, "setPrintSpeed not supported on CC V1"));
   }
+  async setChamberLight(_on: boolean): Promise<Result<void>> {
+    return err(new ElegooError(ErrorCode.OPERATION_NOT_IMPLEMENTED, "setChamberLight not supported on CC V1"));
+  }
 
   async getPrintTaskList(_page?: number, _pageSize?: number): Promise<Result<PrintTaskListData>> {
     return err(new ElegooError(ErrorCode.OPERATION_NOT_IMPLEMENTED, "getPrintTaskList not supported on CC V1"));

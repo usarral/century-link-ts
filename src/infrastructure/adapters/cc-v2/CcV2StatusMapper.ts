@@ -61,6 +61,10 @@ interface RawGcodeMove {
   speed_mode?: number;
 }
 
+interface RawLed {
+  status?: number; // 0 = off, 1 = on
+}
+
 export interface RawCcV2Status {
   machine_status?: RawMachineStatus;
   extruder?: RawExtruder;
@@ -70,6 +74,7 @@ export interface RawCcV2Status {
   external_device?: RawExternalDevice;
   print_status?: RawPrintStatus;
   gcode_move?: RawGcodeMove;
+  led?: RawLed;
   // error_code is present in responses but ignored
   error_code?: number;
 }
@@ -258,6 +263,11 @@ export function mapStatus(printerId: string, raw: RawCcV2Status): PrinterStatusD
     canvases: [],
   };
 
+  const lights: Record<string, { connected: boolean; brightness: number; color: number }> = {};
+  if (raw.led !== undefined) {
+    lights.chamber = { connected: true, brightness: raw.led.status ? 100 : 0, color: 0 };
+  }
+
   return {
     printerId,
     printer: core,
@@ -265,7 +275,7 @@ export function mapStatus(printerId: string, raw: RawCcV2Status): PrinterStatusD
     temperatures,
     fans,
     axes: [],
-    lights: {},
+    lights,
     storage: {},
     canvas: emptyCanvas,
     externalDevices,
